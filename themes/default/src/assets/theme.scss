@@ -1,0 +1,67 @@
+$theme-colors:
+(
+  "class": #ffc107,
+  "interface": #fd7e14,
+  "function": #6610f2,
+  "method": #6f42c1,
+  "variable": #20c997,
+  "property": #17a2b8,
+);
+
+@import "../../node_modules/bootstrap/scss/functions";
+@import "../../node_modules/bootstrap/scss/variables";
+@import "../../node_modules/bootstrap/scss/mixins";
+
+// $theme-colors:
+// (
+//   "class": $yellow,
+//   "interface": $orange,
+//   "function": $indigo,
+//   "method": $purple,
+//   "variable": $teal,
+//   "property": $cyan,
+// );
+
+@import "../../node_modules/bootstrap/scss/grid";
+@import "../../node_modules/bootstrap/scss/root";
+@import "../../node_modules/bootstrap/scss/reboot";
+@import "../../node_modules/bootstrap/scss/type";
+@import "../../node_modules/bootstrap/scss/utilities";
+
+@import "../../node_modules/bootstrap/scss/badge";
+@import "../../node_modules/bootstrap/scss/card";
+@import "../../node_modules/bootstrap/scss/code";
+
+html, body
+{
+  height: 100%;
+  overflow: hidden;
+}
+
+body
+{
+  display: flex;
+  flex-direction: column;
+}
+
+main
+{
+  display: flex;
+  flex-direction: row;
+  flex-basis: 100%;
+
+  > nav
+  {
+    @extend .border-right;
+    flex-basis: 30%;
+    padding: $spacer;
+    overflow: auto;
+  }
+
+  > #content
+  {
+    padding: $spacer;
+    flex-basis: 100%;
+    overflow: auto;
+  }
+}

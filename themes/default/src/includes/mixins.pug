@@ -1,0 +1,85 @@
+mixin tagType(doc)
+  case doc.docType
+    default
+      span.badge(class=`badge-${doc.docType}`)&attributes(attributes)= doc.docType
+    when 'variable'
+      span.badge(class=`badge-${doc.docType}`)&attributes(attributes) var
+
+mixin class(doc)
+  .card.mb-3(id=doc.id)
+    .card-body
+      h3.card-title
+        = doc.name
+        +tagType(doc).ml-2
+      
+      p= doc.description
+
+      if doc.methods.length > 0
+        h4 Methods
+
+        each method in doc.methods
+          +method(method)
+      
+      if doc.properties.length > 0
+        h4 Properties
+
+        each property in doc.properties
+          +property(property)
+
+mixin function(doc)
+  .card.mb-3(id=doc.id)
+    .card-body
+      h3.card-title
+        = doc.name
+        +tagType(doc).ml-2
+
+      pre.card-title.bg-light.mb-2
+        strong= doc.name
+        = doc.signature
+
+      p= doc.description
+
+      +parameters(doc)
+
+mixin variable(doc)
+  .card.mb-3(id=doc.id)
+    .card-body
+      h3.card-title
+        = doc.name
+        +tagType(doc).ml-2
+
+      pre.card-title.bg-light.mb-2
+        strong= doc.name
+        = `: ${doc.type}`
+
+      p=doc.description
+
+mixin method(doc)
+  .card.mb-3
+    .card-body
+      pre.card-title.bg-light.mb-2
+        strong= doc.name
+        = doc.signature
+
+      p=doc.description
+
+      +parameters(doc)
+
+mixin property(doc)
+  .card.mb-3
+    .card-body
+      pre.card-title.bg-light.mb-2
+        strong= doc.name
+        = `: ${doc.type}`
+
+      p=doc.description
+
+mixin parameters(doc)
+  if doc.parameters.length > 0
+    p: strong Parameters:
+    dl.row.ml-1
+      each parameter in doc.parameters
+        dt.col-sm-2
+          = `${parameter.name}: `
+          code= parameter.type
+        dd.col-sm-10= parameter.description

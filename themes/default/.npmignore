@@ -1,0 +1,6 @@
+node_modules
+
+src/assets/*.scss
+src/assets/*.map
+
+*.code-workspace

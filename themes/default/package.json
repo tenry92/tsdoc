@@ -1,0 +1,16 @@
+{
+  "name": "@tenry/tsdoc-theme-default",
+  "version": "0.1.0",
+  "description": "",
+  "main": "src/index.pug",
+  "scripts": {
+    "build": "sass -s compressed src/assets/theme.scss src/assets/theme.css",
+    "pack": "tar -cf default.tgz src/*.pug src/assets/*.css"
+  },
+  "author": "Simon \"Tenry\" Burchert",
+  "license": "MIT",
+  "devDependencies": {
+    "bootstrap": "^4.1.1",
+    "sass": "^1.5.1"
+  }
+}

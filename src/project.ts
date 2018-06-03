@@ -61,67 +61,9 @@ export default class Project {
     const project = new Project(projectPath, logger);
     project.packageFile = path.join(project.basePath, 'package.json');
 
-    project.nodePackage = {
-      author: '',
-      description: '',
-      name: path.basename(projectPath),
-      version: '1.0.0',
-    };
-
-    logger.verbose(`reading ${project.packageFile}`);
-    try {
-      const nodePkgJson = await fs.readFile(project.packageFile, 'utf8');
-      project.nodePackage = {...project.nodePackage, ...JSON.parse(nodePkgJson)};
-    } catch {}
-
-    logger.verbose(`reading ${docConfigFile}`);
-    const tsdocConfigJson = await fs.readFile(docConfigFile, 'utf8');
-    const tsdocConfig = {
-      excludePrivate: false,
-      excludeProtected: false,
-      moduleName: project.nodePackage!.name,
-      theme: 'default',
-      title: project.nodePackage!.name,
-      tsConfigFile: 'tsconfig.json',
-      ...JSON.parse(tsdocConfigJson),
-    } as ProjectConfig;
-
-    absolutePaths(tsdocConfig, project.basePath, [
-      'source',
-      'destination',
-      'tsConfigFile',
-    ]);
-
-    if(/^(.|..)?\//.test(tsdocConfig.theme)) {
-      if(!path.isAbsolute(tsdocConfig.theme)) {
-        absolutePaths(tsdocConfig, project.basePath, ['theme']);
-      }
-    } else {
-      absolutePaths(tsdocConfig, path.join(__dirname, '../themes'), ['theme']);
-    }
-
-    project.config = tsdocConfig;
-
-    logger.verbose(`reading ${project.config.tsConfigFile}`);
-    const tsConfigJson = await fs.readFile(project.config.tsConfigFile, 'utf8');
-    const tsConfig = ts.parseConfigFileTextToJson(project.config.tsConfigFile, tsConfigJson);
-    const compilerOptions = tsConfig.config.compilerOptions;
-
-    switch((compilerOptions.module || 'CommonJS').toLowerCase()) {
-      case 'commonjs': compilerOptions.module = ts.ModuleKind.CommonJS; break;
-      case 'amd': compilerOptions.module = ts.ModuleKind.AMD; break;
-      case 'umd': compilerOptions.module = ts.ModuleKind.UMD; break;
-      case 'system': compilerOptions.module = ts.ModuleKind.System; break;
-      case 'es2015': compilerOptions.module = ts.ModuleKind.ES2015; break;
-      case 'esnext': compilerOptions.module = ts.ModuleKind.ESNext; break;
-    }
-
-    switch((compilerOptions.moduleResolution || 'node').toLowerCase()) {
-      case 'classic': compilerOptions.moduleResolution = ts.ModuleResolutionKind.Classic; break;
-      case 'node': compilerOptions.moduleResolution = ts.ModuleResolutionKind.NodeJs; break;
-    }
-
-    project.compilerOptions = compilerOptions;
+    await project.readPackageFile();
+    await project.readTsdocFile();
+    await project.readTsConfigFile();
 
     return project;
   }
@@ -148,5 +90,89 @@ export default class Project {
     this.files = files;
 
     await emit(this);
+  }
+
+  private async readPackageFile() {
+    this.nodePackage = {
+      author: '',
+      description: '',
+      name: path.basename(this.basePath),
+      version: '1.0.0',
+    };
+
+    this.logger.verbose(`reading ${this.packageFile}`);
+    try {
+      const nodePkgJson = await fs.readFile(this.packageFile!, 'utf8');
+      this.nodePackage = {...this.nodePackage, ...JSON.parse(nodePkgJson)};
+    } catch {}
+  }
+
+  private async readTsdocFile() {
+    const docConfigFile = path.join(this.basePath, 'tsdoc.json');
+    this.logger.verbose(`reading ${docConfigFile}`);
+    const tsdocConfigJson = await fs.readFile(docConfigFile, 'utf8');
+    const tsdocConfig = {
+      excludePrivate: false,
+      excludeProtected: false,
+      moduleName: this.nodePackage!.name,
+      theme: 'default',
+      title: this.nodePackage!.name,
+      tsConfigFile: 'tsconfig.json',
+      ...JSON.parse(tsdocConfigJson),
+    } as ProjectConfig;
+
+    absolutePaths(tsdocConfig, this.basePath, [
+      'source',
+      'destination',
+      'tsConfigFile',
+    ]);
+
+    if(/^(.|..)?\//.test(tsdocConfig.theme)) {
+      if(!path.isAbsolute(tsdocConfig.theme)) {
+        absolutePaths(tsdocConfig, this.basePath, ['theme']);
+      }
+    } else {
+      absolutePaths(tsdocConfig, path.join(__dirname, '../themes'), ['theme']);
+    }
+
+    const themeDir = tsdocConfig.theme;
+    const themePkgFile = path.join(themeDir, 'package.json');
+
+    try {
+      this.logger.verbose(`trying to read ${themePkgFile}`);
+      const themePkg = JSON.parse(await fs.readFile(themePkgFile, 'utf8'));
+
+      if(typeof themePkg.main == 'string') {
+        const mainFile = path.resolve(themeDir, themePkg.main);
+        tsdocConfig.theme = path.dirname(mainFile);
+      }
+    } catch {
+      this.logger.verbose(`reading ${themePkgFile} failed`);
+    }
+
+    this.config = tsdocConfig;
+  }
+
+  private async readTsConfigFile() {
+    this.logger.verbose(`reading ${this.config!.tsConfigFile}`);
+    const tsConfigJson = await fs.readFile(this.config!.tsConfigFile, 'utf8');
+    const tsConfig = ts.parseConfigFileTextToJson(this.config!.tsConfigFile, tsConfigJson);
+    const compilerOptions = tsConfig.config.compilerOptions;
+
+    switch((compilerOptions.module || 'CommonJS').toLowerCase()) {
+      case 'commonjs': compilerOptions.module = ts.ModuleKind.CommonJS; break;
+      case 'amd': compilerOptions.module = ts.ModuleKind.AMD; break;
+      case 'umd': compilerOptions.module = ts.ModuleKind.UMD; break;
+      case 'system': compilerOptions.module = ts.ModuleKind.System; break;
+      case 'es2015': compilerOptions.module = ts.ModuleKind.ES2015; break;
+      case 'esnext': compilerOptions.module = ts.ModuleKind.ESNext; break;
+    }
+
+    switch((compilerOptions.moduleResolution || 'node').toLowerCase()) {
+      case 'classic': compilerOptions.moduleResolution = ts.ModuleResolutionKind.Classic; break;
+      case 'node': compilerOptions.moduleResolution = ts.ModuleResolutionKind.NodeJs; break;
+    }
+
+    this.compilerOptions = compilerOptions;
   }
 }

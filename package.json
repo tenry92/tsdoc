@@ -7,7 +7,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepublish": "npm run build",
+    "build:themes": "cd themes/default && npm run build",
+    "prepublish": "npm run build && npm run build:themes",
     "lint": "tslint -c tslint.json 'src/**/*.ts'"
   },
   "author": "Simon \"Tenry\" Burchert",
@@ -17,7 +18,8 @@
   },
   "license": "MIT",
   "files": [
-    "lib"
+    "lib",
+    "themes"
   ],
   "dependencies": {
     "argparse": "^1.0.10",
