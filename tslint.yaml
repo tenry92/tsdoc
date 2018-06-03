@@ -1,0 +1,24 @@
+extends: "tslint:recommended"
+rules:
+  quotemark: [true, single]
+  member-access: [true, no-public]
+  whitespace:
+    - true
+    - check-decl
+    - check-operator
+    - check-separator
+    - check-rest-spread
+    - check-type
+    - check-typecast
+    - check-type-operator
+    - check-preblock
+  arrow-parens: false
+  triple-equals: false
+  interface-name: false
+  array-type: [true, array]
+  no-empty: false
+  ordered-imports:
+    - true
+    - named-imports-order: lowercase-last # AbstractComponent, GameObject, create, destroy
+  radix: false
+  no-bitwise: false
