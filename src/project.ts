@@ -4,14 +4,9 @@ import * as path from 'path';
 import * as ts from 'typescript';
 import * as winston from 'winston';
 
-import classDoc from './parsers/class';
-import funcDoc from './parsers/function';
-import interfaceDoc from './parsers/interface';
-import varDoc from './parsers/variable';
-
-import {DocEntry, FileDocEntry, excludePrivates, sortEntriesByName} from './doc';
-import {getDocumentation} from './docblock';
+import {DocEntry, FileDocEntry} from './doc';
 import emit from './emit';
+import Parser from './parser';
 
 function absolutePaths(input: {[key: string]: any}, basePath: string, keys: string[]) {
   for(const key of keys) {
@@ -19,6 +14,16 @@ function absolutePaths(input: {[key: string]: any}, basePath: string, keys: stri
       input[key] = path.join(basePath, input[key]);
     }
   }
+}
+
+async function findFile(names: string[]) {
+  for(const name of names) {
+    try {
+      await fs.access(name);
+    } catch {}
+  }
+
+  return undefined;
 }
 
 export interface NodePackage {
@@ -36,15 +41,38 @@ export interface ProjectConfig {
   destination: string;
   theme: string;
   title: string;
+  tsConfigFile: string;
 }
 
 export default class Project {
-  static async fromConfigFile(docConfigFile: string, logger: winston.LoggerInstance) {
-    const project = new Project(path.dirname(docConfigFile), logger);
+  static async fromConfigFile(projectPath: string, logger: winston.LoggerInstance) {
+    const stats = await fs.stat(projectPath);
+    let docConfigFile: string;
+
+    if(stats.isFile()) {
+      docConfigFile = projectPath;
+      projectPath = path.dirname(docConfigFile);
+    } else if(stats.isDirectory()) {
+      docConfigFile = path.join(projectPath, 'tsdoc.json');
+    } else {
+      throw new Error(`${projectPath} not found`);
+    }
+
+    const project = new Project(projectPath, logger);
+    project.packageFile = path.join(project.basePath, 'package.json');
+
+    project.nodePackage = {
+      author: '',
+      description: '',
+      name: path.basename(projectPath),
+      version: '1.0.0',
+    };
 
     logger.verbose(`reading ${project.packageFile}`);
-    const nodePkgJson = await fs.readFile(project.packageFile, 'utf8');
-    project.nodePackage = JSON.parse(nodePkgJson);
+    try {
+      const nodePkgJson = await fs.readFile(project.packageFile, 'utf8');
+      project.nodePackage = {...project.nodePackage, ...JSON.parse(nodePkgJson)};
+    } catch {}
 
     logger.verbose(`reading ${docConfigFile}`);
     const tsdocConfigJson = await fs.readFile(docConfigFile, 'utf8');
@@ -52,21 +80,31 @@ export default class Project {
       excludePrivate: false,
       excludeProtected: false,
       moduleName: project.nodePackage!.name,
+      theme: 'default',
       title: project.nodePackage!.name,
+      tsConfigFile: 'tsconfig.json',
       ...JSON.parse(tsdocConfigJson),
     } as ProjectConfig;
 
     absolutePaths(tsdocConfig, project.basePath, [
       'source',
       'destination',
-      'theme',
+      'tsConfigFile',
     ]);
+
+    if(/^(.|..)?\//.test(tsdocConfig.theme)) {
+      if(!path.isAbsolute(tsdocConfig.theme)) {
+        absolutePaths(tsdocConfig, project.basePath, ['theme']);
+      }
+    } else {
+      absolutePaths(tsdocConfig, path.join(__dirname, '../themes'), ['theme']);
+    }
 
     project.config = tsdocConfig;
 
-    logger.verbose(`reading ${project.tsConfigFile}`);
-    const tsConfigJson = await fs.readFile(project.tsConfigFile, 'utf8');
-    const tsConfig = ts.parseConfigFileTextToJson(project.tsConfigFile, tsConfigJson);
+    logger.verbose(`reading ${project.config.tsConfigFile}`);
+    const tsConfigJson = await fs.readFile(project.config.tsConfigFile, 'utf8');
+    const tsConfig = ts.parseConfigFileTextToJson(project.config.tsConfigFile, tsConfigJson);
     const compilerOptions = tsConfig.config.compilerOptions;
 
     switch((compilerOptions.module || 'CommonJS').toLowerCase()) {
@@ -94,104 +132,21 @@ export default class Project {
 
   config?: ProjectConfig;
 
+  packageFile?: string;
+
   docs = [] as DocEntry[];
 
   files = [] as DocEntry[];
 
-  get packageFile() {
-    return path.join(this.basePath, 'package.json');
-  }
-
-  get tsConfigFile() {
-    return path.join(this.basePath, 'tsconfig.json');
-  }
-
   private constructor(readonly basePath: string, readonly logger: winston.LoggerInstance) {}
 
   async generateDocumentation() {
-    const inputPath = this.config!.source;
-    const fileNames = await fs.readdir(inputPath);
+    const parser = new Parser(this);
+    const {docs, files} = await parser.parse();
 
-    const program = ts.createProgram(
-      fileNames.map(fileName => path.join(inputPath, fileName)),
-      this.compilerOptions!,
-    );
-    const checker = program.getTypeChecker();
-
-    this.logger.info('parsing source files');
-    for(const sourceFile of program.getSourceFiles()) {
-      if(!sourceFile.isDeclarationFile) {
-        const relativePath = path.relative(inputPath, sourceFile.fileName);
-        this.logger.verbose(`parsing ${relativePath}`);
-
-        const sourceSymbol = checker.getSymbolAtLocation(sourceFile);
-
-        const fileDoc = getDocumentation(sourceSymbol!, checker) as FileDocEntry;
-        fileDoc.docType = 'file';
-        fileDoc.fileName = relativePath;
-        fileDoc.moduleName = relativePath == 'index.ts' ?
-          this.config!.moduleName :
-          this.config!.moduleName + '/' + relativePath.replace(/\.ts$/, '')
-        ;
-        fileDoc.exports = [];
-
-        const idPrefix = fileDoc.moduleName.replace(/\//g, '-') + '-';
-
-        const expSymbols = checker.getExportsOfModule(sourceSymbol!);
-
-        for(const expSymbol of expSymbols) {
-          if(expSymbol.valueDeclaration) {
-            const doc = visit(expSymbol.valueDeclaration);
-            if(doc) {
-              doc.srcFile = fileDoc;
-              doc.exportName = checker.symbolToString(expSymbol);
-              doc.id = `${idPrefix}${doc.exportName}`;
-              this.docs.push(doc);
-              fileDoc.exports.push(doc);
-            }
-          } else if(expSymbol.declarations) {
-            for(const decl of expSymbol.declarations) {
-              const doc = visit(decl);
-              if(doc) {
-                doc.srcFile = fileDoc;
-                doc.exportName = checker.symbolToString(expSymbol);
-                doc.id = `${idPrefix}${doc.exportName}`;
-                this.docs.push(doc);
-                fileDoc.exports.push(doc);
-              }
-            }
-          }
-        }
-
-        sortEntriesByName(fileDoc.exports);
-        this.files.push(fileDoc);
-      }
-    }
-
-    if(this.config!.excludePrivate) {
-      excludePrivates(this.docs);
-    }
-
-    sortEntriesByName(this.docs);
-    sortEntriesByName(this.files);
+    this.docs = docs;
+    this.files = files;
 
     await emit(this);
-
-    function visit(node: ts.Declaration) {
-      let doc: DocEntry | undefined;
-      if(ts.isClassDeclaration(node)) {
-        doc = classDoc(node, checker);
-      } else if(ts.isFunctionDeclaration(node)) {
-        doc = funcDoc(node, checker);
-      } else if(ts.isInterfaceDeclaration(node)) {
-        doc = interfaceDoc(node, checker);
-      } else if(ts.isVariableDeclaration(node)) {
-        doc = varDoc(node, checker);
-      } else if(ts.isEnumDeclaration(node)) {
-        // todo
-      }
-
-      return doc;
-    }
   }
 }
