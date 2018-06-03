@@ -2,7 +2,9 @@
   "name": "@tenry/tsdoc",
   "version": "0.1.1",
   "description": "TypeScript documentationi generator.",
-  "bin": "lib/index.js",
+  "bin": {
+    "tsdoc": "lib/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "prepublish": "npm run build",
