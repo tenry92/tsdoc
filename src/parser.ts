@@ -44,7 +44,11 @@ export default class Parser {
 
         const sourceSymbol = checker.getSymbolAtLocation(sourceFile);
 
-        const fileDoc = getDocumentation(sourceSymbol!, checker) as FileDocEntry;
+        if(!sourceSymbol) {
+          continue;
+        }
+
+        const fileDoc = getDocumentation(sourceSymbol, checker) as FileDocEntry;
         fileDoc.docType = 'file';
         fileDoc.fileName = relativePath;
         fileDoc.moduleName = relativePath == 'index.ts' ?
